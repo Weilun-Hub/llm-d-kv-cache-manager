@@ -3,6 +3,7 @@ cd ..
 
 export PYTHONPATH=${PYTHONPATH}:$(pwd)/pkg/preprocessing/chat_completions
 
+export HF_TOKEN="/home/relay/liujiacheng06/models/kat-coder-pro-v1-0-1/"
 export ZMQ_ENDPOINT="tcp://*:5557"
 export ZMQ_TOPIC="sglang@public-wlf3-ge103-kce-node142@kat-coder"
 export PYTHONHASHSEED=0

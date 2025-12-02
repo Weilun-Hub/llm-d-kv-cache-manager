@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+    "path/filepath"
+    "strings"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
@@ -35,7 +37,7 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-        ctrzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
+    ctrzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
@@ -56,6 +58,7 @@ const (
 	defaultHTTPPort = "8080"
 
 	envExternalTokenization = "EXTERNAL_TOKENIZATION"
+    envLocalTokenizerDir = "LOCAL_TOKENIZER_DIR"
 )
 
 // ChatCompletionsRequest holds the fields needed for chat-completions rendering.
@@ -66,8 +69,8 @@ type ChatCompletionsRequest struct {
 
 func main() {
 
-        zlogger := ctrzap.New(ctrzap.UseDevMode(true))
-        log.SetLogger(zlogger)
+    zlogger := ctrzap.New(ctrzap.UseDevMode(true))
+    log.SetLogger(zlogger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -176,9 +179,34 @@ func getKVCacheIndexerConfig() (*kvcache.Config, error) {
 	}
 
 	huggingFaceToken := os.Getenv(envHFToken)
-	if huggingFaceToken != "" {
+	if huggingFaceToken != "" && strings.HasPrefix(huggingFaceToken, "/") {
+
+        tokenizerDir := huggingFaceToken
+        tokenizerJSONPath := filepath.Join(tokenizerDir, "tokenizer.json")
+
+        if _, err := os.Stat(tokenizerJSONPath); err == nil {
+            localConfig := &tokenization.LocalTokenizerConfig{
+                AutoDiscoveryDir: tokenizerDir,
+                AutoDiscoveryTokenizerFileName: "tokenizer.json",
+                ModelTokenizerMap: make(map[string]string),
+            }
+
+            baseName := filepath.Base(tokenizerDir)
+            if baseName != "" && baseName != "." {
+                localConfig.ModelTokenizerMap[baseName] = tokenizerJSONPath
+            }
+
+            if len(localConfig.ModelTokenizerMap) > 0 {
+                config.TokenizersPoolConfig.LocalTokenizerConfig = localConfig
+                config.TokenizersPoolConfig.HFTokenizerConfig = nil
+            }
+        } else {
+            return config, err
+        }
+
+    } else if huggingFaceToken != "" {
 		config.TokenizersPoolConfig.HFTokenizerConfig.HuggingFaceToken = huggingFaceToken
-	}
+	} 
 
 	hashSeed := os.Getenv(pythonHashSeed)
 	if hashSeed != "" {
@@ -319,8 +347,9 @@ func setupUnifiedHTTPEndpoints(
 		// Get chat template for the model if not provided
 		if req.ChatTemplate == "" {
 			templateReq := preprocessing.FetchChatTemplateRequest{
-				Model: req.Model,
-				Token: os.Getenv(envHFToken),
+				// Model: req.Model,
+				Model: os.Getenv(envHFToken),
+				Token: "",
 			}
 
 			var err error
