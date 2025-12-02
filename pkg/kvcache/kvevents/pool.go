@@ -231,9 +231,17 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
                 event = bs
             }
 		case "BlockRemoved":
-			var br BlockRemoved
-			unmarshalErr = msgpack.Unmarshal(payloadBytes, &br)
-			event = br
+            if eventFormat == EventFormatSGLang {
+                var br BlockRemovedSGLang
+                unmarshalErr = msgpack.Unmarshal(payloadBytes, &br)
+                if unmarshalErr == nil {
+                    event = br.ToBlockRemoved()
+                }
+            } else {
+			    var br BlockRemoved
+			    unmarshalErr = msgpack.Unmarshal(payloadBytes, &br)
+			    event = br
+            }
 		case "AllBlocksCleared":
 			var ac AllBlocksCleared
 			unmarshalErr = msgpack.Unmarshal(payloadBytes, &ac)

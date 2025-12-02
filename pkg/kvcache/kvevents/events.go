@@ -87,6 +87,19 @@ func (bs BlockStoredSGLang) ToBlockStored() BlockStored {
     }
 }
 
+func (BlockStoredSGLang) isEvent() {}
+
+func (bs BlockStoredSGLang) ToTaggedUnion() []any {
+    return []any{
+        BlockStoredEventTag,
+        bs.BlockHashes,
+        bs.ParentBlockHash,
+        bs.TokenIds,
+        bs.BlockSize,
+        bs.LoraID,
+    }
+}
+
 // ToTaggedUnion converts the BlockStored event to a tagged union format.
 //
 //nolint:gocritic // Keeping the receiver as a value
@@ -110,6 +123,27 @@ type BlockRemoved struct {
 	_           struct{} `msgpack:",array"`
 	BlockHashes []any
 	Medium      *string `msgpack:",omitempty"`
+}
+
+type BlockRemovedSGLang struct {
+	_           struct{} `msgpack:",array"`
+	BlockHashes []any
+}
+
+func (br BlockRemovedSGLang) ToBlockRemoved() BlockRemoved {
+    return BlockRemoved{
+        BlockHashes: br.BlockHashes,
+        Medium: nil,
+    }
+}
+
+func (BlockRemovedSGLang) isEvent() {}
+
+func (br BlockRemovedSGLang) ToTaggedUnion() []any {
+	return []any{
+		BlockRemovedEventTag,
+		br.BlockHashes,
+	}
 }
 
 func (br BlockRemoved) ToTaggedUnion() []any {
