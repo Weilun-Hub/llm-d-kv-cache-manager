@@ -42,6 +42,8 @@ type Config struct {
 	TopicFilter string `json:"topicFilter"`
 	// Concurrency is the number of parallel workers to run.
 	Concurrency int `json:"concurrency"`
+
+        SupportedFormats []EventFormat `json:"supportedFormats,omitempty"`
 }
 
 // DefaultConfig returns a default configuration for the event processing pool.
@@ -50,6 +52,7 @@ func DefaultConfig() *Config {
 		ZMQEndpoint: "tcp://*:5557",
 		TopicFilter: "kv@",
 		Concurrency: 4,
+                SupportedFormats: []EventFormat{},
 	}
 }
 
@@ -176,6 +179,9 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 	debugLogger := log.FromContext(ctx).V(logging.DEBUG)
 	debugLogger.V(logging.TRACE).Info("Processing event", "topic", msg.Topic, "seq", msg.Seq)
 
+        eventFormat := DetectEventFormat(msg.Topic)
+        debugLogger.V(logging.TRACE).Info("Detected event format", "format", eventFormat, "topic", msg.Topic)
+
 	var eventBatch EventBatch
 	if err := msgpack.Unmarshal(msg.Payload, &eventBatch); err != nil {
 		// This is likely a "poison pill" message that can't be unmarshalled.
@@ -205,7 +211,7 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 
 		var tag string
 		if err := msgpack.Unmarshal(taggedUnion[0], &tag); err != nil {
-			debugLogger.Error(err, "Failed to unmarshal tag from tagged union, skipping event")
+			debugLogger.Error(err, "Failed to unmarshal tag from tagged union, skipping event", tag)
 			continue
 		}
 

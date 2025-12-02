@@ -35,6 +35,7 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+        ctrzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
@@ -64,6 +65,10 @@ type ChatCompletionsRequest struct {
 }
 
 func main() {
+
+        zlogger := ctrzap.New(ctrzap.UseDevMode(true))
+        log.SetLogger(zlogger)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

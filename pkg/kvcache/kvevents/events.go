@@ -25,7 +25,12 @@ const (
 	BlockRemovedEventTag = "BlockRemoved"
 	// AllBlocksClearedEventTag is the tag for AllBlocksCleared events.
 	AllBlocksClearedEventTag = "AllBlocksCleared"
+
+        EventFormatVLLM = "vllm"
+        EventFormatSGLang = "sglang"
 )
+
+type EventFormat string
 
 // event is a marker interface for KV-cache events.
 type event interface {
@@ -40,6 +45,13 @@ type EventBatch struct {
 	TS               float64
 	Events           []msgpack.RawMessage
 	DataParallelRank *int `msgpack:",omitempty"`
+}
+
+func DetectEventFormat(topic string) EventFormat {
+        if len(topic) >= 7 && topic[:7] == "sglang@" {
+                return EventFormatSGLang
+        }
+        return EventFormatVLLM
 }
 
 // BlockStored event.
