@@ -43,7 +43,7 @@ type Config struct {
 	// Concurrency is the number of parallel workers to run.
 	Concurrency int `json:"concurrency"`
 
-        SupportedFormats []EventFormat `json:"supportedFormats,omitempty"`
+    SupportedFormats []EventFormat `json:"supportedFormats,omitempty"`
 }
 
 // DefaultConfig returns a default configuration for the event processing pool.
@@ -52,7 +52,7 @@ func DefaultConfig() *Config {
 		ZMQEndpoint: "tcp://*:5557",
 		TopicFilter: "kv@",
 		Concurrency: 4,
-                SupportedFormats: []EventFormat{},
+        SupportedFormats: []EventFormat{},
 	}
 }
 
@@ -179,8 +179,8 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 	debugLogger := log.FromContext(ctx).V(logging.DEBUG)
 	debugLogger.V(logging.TRACE).Info("Processing event", "topic", msg.Topic, "seq", msg.Seq)
 
-        eventFormat := DetectEventFormat(msg.Topic)
-        debugLogger.V(logging.TRACE).Info("Detected event format", "format", eventFormat, "topic", msg.Topic)
+    eventFormat := DetectEventFormat(msg.Topic)
+    debugLogger.V(logging.TRACE).Info("Detected event format", "format", eventFormat, "topic", msg.Topic)
 
 	var eventBatch EventBatch
 	if err := msgpack.Unmarshal(msg.Payload, &eventBatch); err != nil {
@@ -219,9 +219,17 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 		var unmarshalErr error
 		switch tag {
 		case "BlockStored":
-			var bs BlockStored
-			unmarshalErr = msgpack.Unmarshal(payloadBytes, &bs)
-			event = bs
+            if eventFormat == EventFormatSGLang {
+                var bs BlockStoredSGLang
+			    unmarshalErr = msgpack.Unmarshal(payloadBytes, &bs)
+                if unmarshalErr == nil {
+                    event = bs.ToBlockStored()
+                }
+            } else {
+                var bs BlockStored
+                unmarshalErr = msgpack.Unmarshal(payloadBytes, &bs)
+                event = bs
+            }
 		case "BlockRemoved":
 			var br BlockRemoved
 			unmarshalErr = msgpack.Unmarshal(payloadBytes, &br)

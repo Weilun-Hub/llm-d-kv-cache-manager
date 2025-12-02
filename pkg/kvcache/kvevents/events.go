@@ -26,8 +26,8 @@ const (
 	// AllBlocksClearedEventTag is the tag for AllBlocksCleared events.
 	AllBlocksClearedEventTag = "AllBlocksCleared"
 
-        EventFormatVLLM = "vllm"
-        EventFormatSGLang = "sglang"
+    EventFormatVLLM = "vllm"
+    EventFormatSGLang = "sglang"
 )
 
 type EventFormat string
@@ -48,10 +48,10 @@ type EventBatch struct {
 }
 
 func DetectEventFormat(topic string) EventFormat {
-        if len(topic) >= 7 && topic[:7] == "sglang@" {
-                return EventFormatSGLang
-        }
-        return EventFormatVLLM
+    if len(topic) >= 7 && topic[:7] == "sglang@" {
+        return EventFormatSGLang
+    }
+    return EventFormatVLLM
 }
 
 // BlockStored event.
@@ -65,6 +65,26 @@ type BlockStored struct {
 	BlockSize       int
 	LoraID          *int    `msgpack:",omitempty"`
 	Medium          *string `msgpack:",omitempty"`
+}
+
+type BlockStoredSGLang struct {
+	_               struct{} `msgpack:",array"`
+	BlockHashes     []any    // Changed from []uint64
+	ParentBlockHash any      // Changed from *uint64
+	TokenIds        []uint32
+	BlockSize       int
+	LoraID          *int    `msgpack:",omitempty"`
+}
+
+func (bs BlockStoredSGLang) ToBlockStored() BlockStored {
+    return BlockStored {
+        BlockHashes:     bs.BlockHashes,
+        ParentBlockHash: bs.ParentBlockHash,
+        TokenIds:        bs.TokenIds,
+        BlockSize:       bs.BlockSize,
+        LoraID:          bs.LoraID,
+        Medium:          nil,
+    }
 }
 
 // ToTaggedUnion converts the BlockStored event to a tagged union format.
