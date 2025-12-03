@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
+	// "github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
 
 const (
@@ -223,6 +223,7 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
                 var bs BlockStoredSGLang
 			    unmarshalErr = msgpack.Unmarshal(payloadBytes, &bs)
                 if unmarshalErr == nil {
+                    debugLogger.Info("[DEBUG] BlockStoredSGLang event found")
                     event = bs.ToBlockStored()
                 }
             } else {
@@ -258,7 +259,7 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 		events = append(events, event)
 	}
 
-    debugLogger.Info("#events captured", len(events))
+    debugLogger.Info("[DEBUG] #events captured", "count", len(events))
 
 	podIdentifier := msg.PodIdentifier
 	modelName := msg.ModelName
@@ -268,15 +269,36 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string,
 	events []event,
 ) {
-	debugLogger := log.FromContext(ctx).V(logging.DEBUG)
-	debugLogger.V(logging.TRACE).Info("Digesting events", "count", len(events))
+	// debugLogger := log.FromContext(ctx).V(logging.DEBUG)
+	// debugLogger.V(logging.TRACE).Info("Digesting events", "count", len(events))
+
+	debugLogger := log.FromContext(ctx)
+	debugLogger.Info("[DEBUG] Digesting events", "count", len(events))
 
 	// Process each event in the batch
 	for _, event := range events {
 		switch ev := event.(type) {
 		case BlockStored:
+
+            var parentHashStr string
+            switch v := ev.ParentBlockHash.(type) {
+            case []byte:
+                parentHashStr = fmt.Sprintf("bytes[%d]:%x", len(v), v)
+            case uint64:
+                parentHashStr = fmt.Sprintf("uint64:%d", v)
+            case int64:
+                parentHashStr = fmt.Sprintf("int64:%d", v)
+            case nil:
+                parentHashStr = "nil"
+            default:
+                parentHashStr = fmt.Sprintf("%T:%v", v, v)
+            }
             
-            debugLogger.Info("digesting BlockStored")
+            debugLogger.Info("[DEBUG] digesting BlockStored",
+                "tokenIds", ev.TokenIds,
+                "blockSize", ev.BlockSize,
+                "blockHashesCount", len(ev.BlockHashes),
+                "parentBlockHash", parentHashStr)
 
 			// Default to gpu.
 			// For non-gpu events, vLLM KV event has a non-empty Medium field.
@@ -320,6 +342,12 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 						"podIdentifier", podIdentifier, "event", ev)
 					continue // Continue processing other events even if one fails
 				}
+
+                debugLogger.Info("Successfully store block keys in index",
+                    "podIdentifier", podIdentifier,
+                    "modelName", modelName,
+                    "keyCount", len(keys))
+
 			}
 
 		case BlockRemoved:

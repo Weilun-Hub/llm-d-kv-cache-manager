@@ -20,7 +20,8 @@ def format_event(event: Any) -> dict:
             "type": "BlockStored",
             "block_hashes": event.block_hashes,
             "parent_block_hash": event.parent_block_hash,
-            "token_ids": event.token_ids[:10] if len(event.token_ids) > 10 else event.token_ids,  # Show first 10
+            # "token_ids": event.token_ids[:10] if len(event.token_ids) > 10 else event.token_ids,  # Show first 10
+            "token_ids": event.token_ids, # if len(event.token_ids) > 10 else event.token_ids,  # Show first 10
             "block_size": event.block_size,
             "lora_id": event.lora_id,
         }

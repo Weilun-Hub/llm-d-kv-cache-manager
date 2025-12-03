@@ -20,11 +20,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+    "fmt"
 
 	"github.com/fxamacker/cbor/v2"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
+	// "github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
+
 )
 
 // defaultBlockSize is the default number of tokens per block.
@@ -143,6 +146,15 @@ func (db *ChunkedTokenDatabase) chunkTokens(tokens []uint32) [][]uint32 {
 		chunks = append(chunks, tokens[i:end])
 	}
 
+    if len(chunks) > 0 {
+        log.FromContext(context.Background()).Info("chunked tokens",
+            "blockSize", db.BlockSize,
+            "totalTokens", len(tokens),
+            "chunkCount", len(chunks),
+            "firstChunkTokens", chunks[0],
+            "hashSeed", db.HashSeed)
+    }
+
 	return chunks
 }
 
@@ -153,8 +165,30 @@ func (db *ChunkedTokenDatabase) TokensToKVBlockKeys(tokens []uint32, modelName s
 		return nil
 	}
 
+    initHashHex := ""
+    if len(parentBytes) >= 8 {
+        initHashHex = fmt.Sprintf("%x", parentBytes[:8])
+    }
+    log.FromContext(context.Background()).Info("generating block keys",
+        "hashSeed", db.HashSeed,
+        "initHashPrefix", initHashHex,
+        "blockSize", db.BlockSize)
+
 	chunks := db.chunkTokens(tokens)
 	ph := db.prefixHashes(parentBytes, chunks)
+
+    computedHashesInfo := make([]string, 0, len(ph))
+    computedUint64Hashes := make([]uint64, 0, len(ph))
+    for i, hashBytes := range ph {
+        hashHex := fmt.Sprintf("%x", hashBytes)
+        hashVal := binary.BigEndian.Uint64(hashBytes[24:])
+        computedHashesInfo = append(computedHashesInfo, fmt.Sprintf("chunk[%d]: full=%s uint64=%d", i, hashHex, hashVal))
+        computedUint64Hashes = append(computedUint64Hashes, hashVal)
+    }
+    log.FromContext(context.Background()).Info("KV manager computed block hashes",
+        "computedHashes", computedHashesInfo,
+        "computedUint64Hashes", computedUint64Hashes,
+        "chunkCount", len(chunks))
 
 	// Convert the final byte hashes to uint64 for the Key struct
 	return utils.SliceMap(ph, func(hashBytes []byte) Key {

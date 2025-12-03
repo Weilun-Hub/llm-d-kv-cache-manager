@@ -132,19 +132,31 @@ func (k *Indexer) KVBlockIndex() kvblock.Index {
 func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.RenderJinjaTemplateRequest, prompt, modelName string,
 	podIdentifiers []string,
 ) (map[string]float64, error) {
-	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
+	// traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
+    
+	logger := log.FromContext(ctx).WithName("kvcache.GetPodScores")
+    traceLogger := logger.V(logging.TRACE)
+
+    logger.Info("GetPodScores called", "modelName", modelName, "promptLength", len(prompt))
 
 	// 1. tokenize prompt
 	tokens := k.tokenizersPool.Tokenize(renderReq, prompt, modelName)
+    logger.Info("tokenized prompt", "tokenCount", len(tokens), "tokens", tokens)
 
 	// 2. get block keys
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
 	if len(blockKeys) == 0 {
+		logger.Info("no block keys found, returning empty scores")
 		traceLogger.Info("no block keys found, returning empty scores")
 		//nolint:nilnil // no need to return an error
 		return nil, nil
 	}
 
+    blockKeyStrs := make([]string, len(blockKeys))
+    for i, k := range blockKeys {
+        blockKeyStrs[i] = k.String()
+    }
+    logger.Info("found block keys", "blockKeyCount", len(blockKeys), "blockKeys", blockKeyStrs)
 	traceLogger.Info("found tokens", "tokens", tokens, "block-keys", blockKeys)
 
 	// 3. query kvblock indexer for pods
@@ -152,6 +164,13 @@ func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.Ren
 	if err != nil {
 		return nil, fmt.Errorf("failed to query kvblock indexer: %w", err)
 	}
+
+    matchingKeysCount := len(keyToPods)
+    totalPodsFound := 0
+    for _, pods := range keyToPods {
+        totalPodsFound += len(pods)
+    }
+    logger.Info("lookup completed", "matchingKeysCount", matchingKeysCount, "totalBlockKeys", len(blockKeys), "totalPodsFound", totalPodsFound)
 	traceLogger.Info("found block keys", "block-keys", blockKeys,
 		"pods", podsPerKeyPrintHelper(keyToPods))
 
@@ -160,6 +179,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.Ren
 	if err != nil {
 		return nil, fmt.Errorf("failed to query kvblock scorer: %w", err)
 	}
+    logger.Info("scoring completed", "podScoresCount", len(podScores), "podScores", podScores)
 	traceLogger.Info("found pod scores", "pod-scores", podScores)
 
 	return podScores, nil
