@@ -229,6 +229,11 @@ func getKVCacheIndexerConfig() (*kvcache.Config, error) {
 	config.KVBlockIndexConfig.EnableMetrics = true
 	config.KVBlockIndexConfig.MetricsLoggingInterval = 30 * time.Second
 
+    zmqTopic := os.Getenv(envZMQTopic)
+    if zmqTopic != "" && strings.HasPrefix(zmqTopic, "sglang@") {
+        config.EventFormat = "sglang"
+    }
+
 	return config, nil
 }
 

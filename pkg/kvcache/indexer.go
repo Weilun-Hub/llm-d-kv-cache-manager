@@ -40,6 +40,7 @@ type Config struct {
 	KVBlockScorerConfig  *KVBlockScorerConfig          // not exported
 	TokenizersPoolConfig *tokenization.Config          `json:"tokenizersPoolConfig"`
 	BackendConfigs       []*KVCacheBackendConfig       `json:"kvCacheBackendConfigs"`
+    EventFormat string `json:"eventFormat,omitempty"`
 }
 
 // NewDefaultConfig returns a default configuration for the Indexer module.
@@ -144,7 +145,15 @@ func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.Ren
     logger.Info("tokenized prompt", "tokenCount", len(tokens), "tokens", tokens)
 
 	// 2. get block keys
-	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
+	// blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
+    var blockKeys []kvblock.Key
+    if k.config != nil && k.config.EventFormat == "sglang" {
+        logger.Info("using SGLang hash algorithm")
+	    blockKeys = k.tokensProcessor.TokensToKVBlockKeysSGLang(tokens, modelName, "")
+    } else {
+        logger.Info("using vLLM hash algorithm")
+	    blockKeys = k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
+    }
 	if len(blockKeys) == 0 {
 		logger.Info("no block keys found, returning empty scores")
 		traceLogger.Info("no block keys found, returning empty scores")

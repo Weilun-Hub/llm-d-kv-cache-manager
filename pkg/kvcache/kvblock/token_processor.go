@@ -20,7 +20,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+    "encoding/hex"
     "fmt"
+    "strconv"
 
 	"github.com/fxamacker/cbor/v2"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -58,6 +60,7 @@ func DefaultTokenProcessorConfig() *TokenProcessorConfig {
 type TokenProcessor interface {
 	// TokensToKVBlockKeys converts tokens into kv_block.Keys.
 	TokensToKVBlockKeys(tokens []uint32, modelName string) []Key
+	TokensToKVBlockKeysSGLang(tokens []uint32, modelName string, parentHashHex string) []Key
 }
 
 // ChunkedTokenDatabase is a concrete implementation of TokenDatabase.
@@ -123,6 +126,78 @@ func (db *ChunkedTokenDatabase) hash(parent []byte, tokens []uint32, extra inter
 	return sum[:] // Return the full 32-byte hash
 }
 
+func (db *ChunkedTokenDatabase) hashSGLang(parentHashHex string, tokens []uint32) string {
+    hasher := sha256.New()
+
+    if parentHashHex != "" {
+        parentBytes, err := hex.DecodeString(parentHashHex)
+        if err == nil {
+            hasher.Write(parentBytes)
+        }
+    }
+    
+    tokenBytes := make([]byte, 4)
+    for _, token := range tokens {
+        binary.LittleEndian.PutUint32(tokenBytes, token)
+        hasher.Write(tokenBytes)
+    }
+
+    return fmt.Sprintf("%x", hasher.Sum(nil))
+}
+
+func hashStrToInt64(hashStr string) int64 {
+    if len(hashStr) < 16 {
+        return 0
+    }
+
+    uint64Val, err := strconv.ParseUint(hashStr[:16], 16, 64)
+    if err != nil {
+        return 0
+    }
+
+    // uint64Val := uint64(0)
+    // fmtScanf(hashStr[:16], "%x", &uint64Val)
+    // const maxInt64Plus1 = uint64(1) << 63
+    // if uint64Val >= maxInt64Plus1 {
+    //    return int64(uint64Val - maxInt64Plus1) - int64(maxInt64Plus1)
+    //}
+
+    return int64(uint64Val)
+}
+
+func (db *ChunkedTokenDatabase) TokensToKVBlockKeysSGLang(tokens []uint32, modelName string, parentHashHex string) [] Key {
+    chunks := db.chunkTokens(tokens)
+    if len(chunks) == 0 {
+        return nil
+    }
+
+    keys := make([]Key, 0, len(chunks))
+    parentHash := parentHashHex
+
+    for _, chunk := range chunks {
+        hashHex := db.hashSGLang(parentHash, chunk)
+        hashInt64 := hashStrToInt64(hashHex)
+
+        //var hashUint64 uint64
+        //if hashInt64 < 0 {
+        //    const maxInt64Plus1 = uint64(1) << 63
+        //    hashUint64 = uint64(hashInt64) + maxInt64Plus1 + maxInt64Plus1
+        //} else {
+        //    hashUint64 = uint64(hashInt64)
+        //}
+        hashUint64 := uint64(hashInt64)
+
+        keys = append(keys, Key{
+            ModelName: modelName,
+            ChunkHash: hashUint64,
+        })
+
+        parentHash = hashHex
+    }
+
+    return keys
+
+}
 // prefixHashes returns a slice of full 32-byte hashes.
 func (db *ChunkedTokenDatabase) prefixHashes(parentHash []byte, tokenChunks [][]uint32) [][]byte {
 	prefix := parentHash
