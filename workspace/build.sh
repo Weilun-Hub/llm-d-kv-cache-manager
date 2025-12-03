@@ -13,7 +13,10 @@ export CGO_ENABLED=1
 go mod tidy
 go mod download
 
+rm -rf bin/kv-cache-manager
+
 mkdir -p bin
+
 go build -o \
     bin/kv-cache-manager \
     examples/kv_events/online/main.go

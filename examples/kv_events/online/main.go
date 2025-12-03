@@ -374,12 +374,24 @@ func setupUnifiedHTTPEndpoints(
 
 		renderedPrompt := response.RenderedChats[0]
 
+        promptPreview := renderedPrompt
+        if len(promptPreview) > 100 {
+            promptPreview = promptPreview[:100] + "..."
+        }
+        logger.Info("Getting pod scores", "model", req.Model, "renderedPrompt", promptPreview)
+
 		// Get score
 		pods, err := kvCacheIndexer.GetPodScores(ctx, nil, renderedPrompt, req.Model, nil)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to get score request: %v", err), http.StatusInternalServerError)
 			return
 		}
+
+        if len(pods) == 0 {
+            logger.Info("No pod scores found")
+        } else {
+            logger.Info("Found pod scores", "count", len(pods), "scores", pods)
+        }
 
 		scoreResponse := struct {
 			PodScores        map[string]float64 `json:"podScores"`

@@ -176,11 +176,11 @@ func (p *Pool) worker(ctx context.Context, workerIndex int) {
 // processEvent deserializes the message payload and calls the appropriate
 // index method based on the event type. It returns an error to trigger retries.
 func (p *Pool) processEvent(ctx context.Context, msg *Message) {
-	debugLogger := log.FromContext(ctx).V(logging.DEBUG)
-	debugLogger.V(logging.TRACE).Info("Processing event", "topic", msg.Topic, "seq", msg.Seq)
+	debugLogger := log.FromContext(ctx) // .V(logging.DEBUG)
+	debugLogger.Info("Processing event", "topic", msg.Topic, "seq", msg.Seq)
 
     eventFormat := DetectEventFormat(msg.Topic)
-    debugLogger.V(logging.TRACE).Info("Detected event format", "format", eventFormat, "topic", msg.Topic)
+    debugLogger.Info("Detected event format", "format", eventFormat, "topic", msg.Topic)
 
 	var eventBatch EventBatch
 	if err := msgpack.Unmarshal(msg.Payload, &eventBatch); err != nil {
@@ -258,6 +258,8 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 		events = append(events, event)
 	}
 
+    debugLogger.Info("#events captured", len(events))
+
 	podIdentifier := msg.PodIdentifier
 	modelName := msg.ModelName
 	p.digestEvents(ctx, podIdentifier, modelName, events)
@@ -273,6 +275,9 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 	for _, event := range events {
 		switch ev := event.(type) {
 		case BlockStored:
+            
+            debugLogger.Info("digesting BlockStored")
+
 			// Default to gpu.
 			// For non-gpu events, vLLM KV event has a non-empty Medium field.
 			deviceTier := DefaultDeviceTier
@@ -298,6 +303,18 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 
 			// Only proceed if we have valid keys to add.
 			if len(keys) > 0 {
+
+                keyStrs := make([]string, len(keys))
+                for i, k := range keys {
+                    keyStrs[i] = k.String()
+                }
+
+                debugLogger.Info("Storing block keys in index",
+                    "podIdentifier", podIdentifier,
+                    "modelName", modelName,
+                    "keyCount", len(keys),
+                    "keys", keyStrs)
+
 				if err := p.index.Add(ctx, keys, podEntries); err != nil {
 					debugLogger.Error(err, "Failed to add event to index",
 						"podIdentifier", podIdentifier, "event", ev)
