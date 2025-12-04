@@ -23,6 +23,7 @@ import (
     "encoding/hex"
     "fmt"
     "strconv"
+    "hash/fnv"
 
 	"github.com/fxamacker/cbor/v2"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -105,6 +106,22 @@ func (db *ChunkedTokenDatabase) getInitHash() []byte {
 	return db.initHash
 }
 
+func HashUint32Tokens(tokens []uint32) uint64 {
+    h := fnv.New64a()
+    var buf [4]byte
+
+    for _, t := range tokens {
+        tokenBytes := make([]byte, 4)
+        binary.LittleEndian.PutUint32(tokenBytes, t)
+        h.Write(tokenBytes)
+    }
+
+    hashVal := int64(h.Sum64())
+    if hashVal >
+
+    return h.Sum64()
+}
+
 // hash computes the full 32-byte SHA256 hash of the given parent, tokens,
 // and extra keys, mimicking the vLLM implementation.
 func (db *ChunkedTokenDatabase) hash(parent []byte, tokens []uint32, extra interface{}) []byte {
@@ -165,7 +182,7 @@ func hashStrToInt64(hashStr string) int64 {
     return int64(uint64Val)
 }
 
-func (db *ChunkedTokenDatabase) TokensToKVBlockKeysSGLang(tokens []uint32, modelName string, parentHashHex string) [] Key {
+func (db *ChunkedTokenDatabase) TokensToKVBlockKeysSGLang(tokens []uint32, modelName string, parentHashHex string) []Key {
     chunks := db.chunkTokens(tokens)
     if len(chunks) == 0 {
         return nil
@@ -174,7 +191,13 @@ func (db *ChunkedTokenDatabase) TokensToKVBlockKeysSGLang(tokens []uint32, model
     keys := make([]Key, 0, len(chunks))
     parentHash := parentHashHex
 
-    for _, chunk := range chunks {
+    logger := log.FromContext(context.Background())
+    logger.Info("TokensToKVBlockKeysSGLang starting",
+        "parentHashHex", parentHashHex,
+        "chunkCount", len(chunks),
+        "firstChunkTokens", chunks[0])
+
+    for i, chunk := range chunks {
         hashHex := db.hashSGLang(parentHash, chunk)
         hashInt64 := hashStrToInt64(hashHex)
 
@@ -185,7 +208,17 @@ func (db *ChunkedTokenDatabase) TokensToKVBlockKeysSGLang(tokens []uint32, model
         //} else {
         //    hashUint64 = uint64(hashInt64)
         //}
-        hashUint64 := uint64(hashInt64)
+        //hashUint64 := uint64(hashInt64)
+
+        hashUint64 := HashUint32Tokens(chunk)
+
+        logger.Info("SGLang hash computation",
+            "chunkIndex", i,
+            "parentHashHex", parentHash,
+            "chunkTokens", chunk,
+            "fullHashHex", hashHex,
+            "hashInt64", hashInt64,
+            "hashUint64", hashUint64)
 
         keys = append(keys, Key{
             ModelName: modelName,
